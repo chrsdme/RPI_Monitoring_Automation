@@ -71,10 +71,10 @@ The system can be configured through the web interface. Core settings include:
 
 ## Documentation
 
-- [User Manual](docs/USER_MANUAL.md) - Complete guide to using the system
-- [API Documentation](docs/API_DOCUMENTATION.md) - Details on all available API endpoints
-- [Hardware Setup](docs/HARDWARE_SETUP.md) - Instructions for hardware connections
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [User Manual](USER_MANUAL.md) - Complete guide to using the system
+- [API Documentation](API_DOCUMENTATION.md) - Details on all available API endpoints
+- [Hardware Setup](HARDWARE_SETUP.md) - Instructions for hardware connections
+- [Troubleshooting](TROUBLESHOOTING.md) - Common issues and solutions
 
 ## Development
 
