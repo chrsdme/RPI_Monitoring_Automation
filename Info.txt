@@ -1,0 +1,170 @@
+Please design and write the code for a fully functional RASPBERY PI 3 B+ application, using the VSCode/Platform IO IDE that meets the following requirements:
+Hardware: 1x Raspberry Pi 3b+ running raspian os x64 without desktop, 1 x SCD40 sensor, 2 x DHT22 sensors, 1 x SSD1306 0.96" mini oled display and a plain 2 pin 3.3v mini fan (for cooling the pi).
+
+Analyse the below requirements and propose a plan on how to build the app, using what languages, full guidance after accepting options. I am not a coder so you will be doing all that based on what we agree on and what not, you are also to provide full guidance on installing any additional software and libraries on the pi itself. 
+
+Full App functionality and walk-through requirements:
+
+1. All 3 Sensors should have a comprehensive initialisation routine, complex error handling and recovery. Should also have configurations available in the profile manager for how often they are read and how often updates should be published on the graphs and logs.
+2. All relay modules should have the following configurations (assigned by default but also editable in the frontend), 
+RelayConfig: assign names, assigns pins, operation times, user overwrite time (default, configurable 5 minutes), dependency, visibility (in the frontend)
+	1. Main PSU, GPIO18(pin12), (00:00-23:59), (user overwrite), independent, not visible
+	2. UV Light, GPIO24(pin18), (00:00-23:59), (user overwrite), depends on relay1, visible   
+	3. Grow Light, GPIO25(pin22), (00:00-23:59),  (user overwrite), depends on relay1, visible
+	4. Tub Fans, GPIO6(pin31), (00:00-23:59),  (user overwrite), depends on relay1, visible 
+	5. Humidifiers, (whatever pin is free), (00:00-23:59),  (user overwrite), depends on relay1, visible 
+	6. Heater, (whatever pin is free), (00:00-23:59),  (user overwrite),  independent, visible
+	7. IN/OUT Fans, (whatever pin is free), (00:00-23:59),  (user overwrite), depends on relay1, visible 
+	8. Reserved, (whatever pin is free), (00:00-23:59),  (user overwrite), independent, not visible
+Relay logic: Relay 1 must be turned on prior to turning on relays 2,3,4  and off if there is no dependency (dependencies should be configurable in frontend), Relays 2,3,4,5,6 and 7 should only operate in the set time frames regardless of reading from sensors, only user will be able to overwrite. Detailed relay automation and functionality:
+Relay1. RUN when needed by other dependants, turn off afterwards,
+Relays 2&3. Run only in the given timeframe, alternating on and off with relay 3, on a pattern of run 1 for x minutes every y minutes, turn off and do the same thing with relay 3, or if manual overwrite by user
+Relay 4. Tub fans should be triggered as follows: by automation parameter, run only in the given timeframe, for x minutes every y minutes (60 minutes), alternatively if CO2 read by the SCDC40 is lover than 1100, but not more than the normal operation schedule, always run in parallel with humidifier relay despite CO2 reading, or if manual overwrite by user 
+Relay 5. Humidifiers should be triggered as follows: by automation parameter, run only in the given timeframe, run if average humidity reading from all 3 sensors is lower than 50% until humidity rises to >85%, run in parallel with relay 7 despite readings, or if manual overwrite by user
+Relay 6. Heater should only run when the average temperature read by all 3 sensors is under 20C and up to 24C, or if manual overwrite by user
+Relay 7. IN/OUT Fans, should be run only in the set time frame for x minutes every y minutes or if CO2 from the SCD40 reading is >1600 until under 1000, or if manual overwrite by user
+All these parameters should be easily available to configure/edit in the frontend.
+For a later time, my intention is to replace relays 1 and 6 with Tapo P100 smart sockets(therefore the Tapo P100 implementation)
+
+3. The web page(app) should be simple, intuitive and professional looking, also all screens friendly (responsive), should also have live indicators of updating readings and graphs (blinking bullets) 						
+	*Should have a main dashboard where all live sensor reads should be visible, live graphs for temperature and humidity, live relay toggles with status(on/off coloured for relays 2,3,4,5,6 and 7)  *Should have a settings page where user can configure pins for sensors and relays, also timers and automation parameters, sensor reading frequency graph update frequency and graph points, logging level selector and display, also al reboot scheduler (day of the week and time, to schedule automatic reboots), 
+	*Should have a network manager page where all network parameters including ssids and passwords can be changed, mqtt parameters to be set, changing of hostname and switching from dhcp to static ip as well as setting the watcher for network stability (changing ssids in case of bad signal or disconnection)
+	*Should have a profiles page where all automation parameters could be set, loaded, saved, exported or imported, app should benefit from multiple profiles and user should be able to easily switch between them. 
+	*Should have system page where all operating parameters and logs are shown (wifi ssid, rssi, space used by spiffs and FW, but also heap (with progress bars), Filesystem file view with links to every file, 
+	*Should have a OTA page with ability to upload update.zip packages, a version display system and a version checker system.
+	*A page where to configure number of TAPO devices (P100 sockets), set username, password, ip and other parameters and to replace what relay (reference here https://github.com/ClementNerma/tapo-rest, https://github.com/mihai-dinculescu/tapo/tree/main/tapo, https://github.com/omegahiro/tapo-esp32/)
+
+4. The ap should also benefit from, Remote Debugging (remote serial console) File System Management (Uploading and downloading or replacing files), 
+
+
+
+A. Backend
+
+
+1. Complete modular code, create modules for each component:
+	1. Core App (main app) * Central orchestrator of all modules * Manages system-wide configurations, start-up routines, resource allocation, and overall system stability, Configures and manages the, Security and Authentication Manager * Manages security-related functions, including user authentication, API key management, encryption, and secure communication protocols.
+
+	2. Network Manager (Handles all networking settings (static/dhcp ip allocation, mDNS, hostname), including WIFI, fallback connectivity options, and connection quality monitoring * Maintains a robust connection to an MQTT broker and handles topic subscriptions and publications).
+
+	3. System Manager (composed of: A. Storage Manager-Abstracts access to filesystem and handles read/write operations, corruption recovery, and file structure organization * Manages persistent storage of settings, logs, cache, and automation scripts * Enables configurations to be saved, B. Time and Synchronization Manager - Synchronizes system time with external NTP servers and manages real-time clock (RTC) functions * Provides time zone adjustments and internal timers for scheduling operations. C. Maintenance and Diagnostics Manager - Includes a testing suite and fallback routines for all hardware * Implements watchdog, error recovery mechanisms, system diagnostics, and self-testing & healing routines D. Debug and Logging Manager - * Provides tools for debugging and troubleshooting the system * Handles all configurations and operations for logging and reporting, including different log levels, log rotation, remote logging & exporting, performance metrics, and system health monitoring, E. Power and Energy Manager - * Handles power-saving policies, sleep/wake routines, deep sleep modes, and wakeup triggers based on sensor events or schedules * Monitors battery levels (if applicable) and optimizes energy consumption where possible * (Note: Disabling Bluetooth without affecting WiFi is possible, but it depends on the specific hardware and firmware implementation. You may need to consult the documentation for your specific device or module.). F. Notification and Alert Manager - * Centralized management of alerts and notifications via different channels like email, Telegram, or push notifications * Implements configurable escalation levels, notification retry mechanisms, and rule-based filtering for critical events G. Profile Manager - suite for creating and loading custom user configurations and saving them as profiles for later use).
+
+	4. Web and API Manager - Serves a web-based UI and manages HTTPS endpoints, handling authentication and responsiveness * Defines and manages API endpoints for internal and external integrations, also provides update mechanism for ACME client and cert downloading
+
+	5. OTA and Firmware Manager - * Handles program updates via OTA, including version validation, update verification, and rollback mechanisms, Version and Update Manager * Keeps track of firmware versioning, module compatibility checks, and configuration migrations between software updates * Provides rollback points and enables smooth transitions when updating system components.
+
+	6. Components and automation - Handles all configurations for sensors, relays, and other devices (Tapo sockets,separate implementation) and operations for automation, unattended operation, control of relays and Tapo smart sockets, Handles all sensor configuration and operation, including calibration routines, health monitoring, and data validation.
+
+4. Memory Management prevent stack overflows and memory leaks 
+5. Please ensure that the application is secure and follows best practices for security and data protection.
+6. Think of all the logic and integrate all endpoints needed for the frontend and ensure 100% efficient, functional, usable integration.
+7. Well document all the code and use //explanations of functions wherever possible 
+8. Use these default pin allocations(override if set in initial setup otherwise).
+// ----- Default Pin Definitions & Relay naming-----
+SCD40-SDA1-SDA (GPIO2)(pin3)
+SCD40-SCL1-SCL (GPIO3)(pin5)
+
+Display-SDA2-SDA (GPIO4)(pin7)
+Display-SCL2-SCL (GPIO5)(pin9)
+
+UpperDHT1-GPIO17(pin11)
+LowerDHTDHT2-GPIO23(pin16)
+
+FAN-GPIO12(pin32) (also write control routines for the fan, temp thresholds when to run based on cpu temp, fan is attached to a pwm pin so you can control modulation and speed accordingly)
+
+RELAY1-GPIO18(pin12)
+RELAY2-GPIO24(pin18)
+RELAY3-GPIO25(pin22)
+RELAY4-GPIO6(pin31)
+For the other 4 relays assign random free pins available after considering the above allocation, they are not connected for the time being and will be added afterwards. 
+
+
+9. Apart from the above guidelines, the app should be able to:
+	a. store 3 pairs of SSIDs and passwords for multiple AP, be able to scan for Access points and differentiate them by MAC), Store values as Wifi_SSID1+WIFI_Pass1, Wifi_SSID2+WIFI_Pass2 and Wifi_SSID3+WIFI_Pass3 etc, also add a text field for hostname for mdns these are mandatory, 2.HTTPs Authetication, fields for default http(s) authentication user and password, these are mandatory, 3.MQTT, input fields for the configuration of MQTT (user,pass,topic, broker etc) these are optional, 4. GPIO config, a toggle for using default GPIO configuration (given in the backend), set by default or alternative configuration, when flipped to alternative, reveal fields to store the following (UpperDHT_PIN, LowerDHT_PIN, SCD_SDA_PIN, SCD_SCL_PIN, Relay1_PIN, Relay2_PIN, Relay3_PIN, Relay4_PIN, Relay5_PIN, Relay6_PIN, Relay7_PIN and Relay8_PIN,), these are mandatory, 5.Update timings, text fields to configure the following: DHT read intervals, SCD read intervals, Graph update interval and Number of points for the graph these are mandatory, 6.Relay config, text fields for: Humidity Low and High Thresholds, Temperature Low and High Thresholds, CO2 Low and High Thresholds, and user override fallback timer, not mandatory fields, 7. Save button, then  all these configurations should be stored as static variables, in a file in the firmware(maybe use nvs_set_str or something similar?), and be made available as a base_default_config.json, close the AP mdoe and reboot to normal operation. once rebooted, load the configuration file. This config file should be available and editable from the configuration modals available in the web interface later in normal boot. Wifi Credentials should be stored in NVS but also available for editing. The name space in NVS is bootwifi.
+	
+	b. Connect to a Wi-Fi network stored prior(WiFi.mode(WIFI_STA)), (if the previously saved credentials do not work or network is not available, revert back to point a. and start the AP mode again and only select 1 SSID), and establish a secure connection to a remote server using MQTT protocol if set in the config, else ignore. No wifi credentials or other security sensitive information will be hardcoded in the app. Once connected to the wifi network and IP is available, print the following info into the console, "Connected to WIFI, IP: $IP!, Webpage available at: http(s)://mdns_hostname.local/index.html". If MQTT is configured and connected, print this as well, "MQTT client, connected!" else ignore until truly connected. 
+	
+	b. Start initializing sensors, use 2 threads, 1 for the dht and 1 for the scd, add 5 seconds warm up time, once done, try the first measurement and print it in the console as U_DHT_Temperature: xx C / Humidity: yy %, L_DHT_Temperature: xx C / Humidity: yy %, SCD_Temperature: xx C / Humidity: yy %, CO2: zzz ppm. 
+	
+	c. Create and implement all necessary endpoints and document them. 
+
+	d. The application should be able to read data from multiple sensors (2xDHT22 and 1xSCD40, temperature, humidity, and CO2) and send the data to the front end and also make it available via api for remote server but also post via mqtt at regular intervals and also print it on the mini display.
+	
+	g. The application should be able to receive commands from the web interface or remote server via api or mqtt and control the ESP32's GPIO pins accordingly, also be able to handle errors and exceptions, and provide a comprehensive mechanism for debugging and logging, the application should be power efficient and optimized for low power consumption and efficient use of resources when set to use batteries power but not limited to, various sleep modes should be available to configure, including scheduling days and times.
+	
+	h. Please provide the complete backend code, including all necessary libraries, headers, and configuration files (point to names or download links, will be using platform io IDE).
+	
+	
+B. Frontend
+
+1. The interface should be written in HTML/CSS/JavaScript, (or suggest something else considering the complexity) be optimised for all browsers, screens and devices (laptops, tablets and mobile phones, so a responsive design will be needed, use bootstrap or something else?).
+2. Look professional and have a intuitive feel, be functional, Use a global theme.
+3. Must be able to switch between light and dark mode seamlessly on all pages and modals.  
+4. Must be easy customizable (provide instructions in user manual part in documentation) 
+5. The interface should be very user friendly and rich in configuration for all parameters (details below)
+6. The interface should be able to send commands to the PI’s GPIO pins and control the device remotely.
+7. The interface should be able to handle errors and exceptions, and provide a mechanism for debugging and logging (configurable logging level, option to export logs via file or endpoint to pipe to a network destination).
+8. Interface should have the following:
+		a. index.html - main Dashboard, - should have a top title/menu banner with the following(from left to right, light/darkmode toggle button, use an icon with a light bulb; a clear graph button, that when clicked, will clear the contents of both graphs and all stored graph data, Profiles(opens the profiles modal in window mode) in the centre, the title <h1> Mushroom Tent Controller; then followed by the actual menu: Settings(opens the settings_modal in window mode), Network(opens the network modal in window mode); System(system.html, target _self)
+									- default startup page, will display 2 graphs(1 for the temperature left side and 1 for humidity, right side; both graphs will show temp and humidity, from all 3 sensors, use distinct legend colouring (try and avoid using red, yellow, orange and green as they are being used for live display thresholds), use same colouring for each sensor in both graphs), graph points and update interval should be initially configured in the init_cfg but also available to edit/reconfigure in the settings_modal.html; each graph should display a blinking dot in the upper right side, when they are being updated, use an orange bullet for the temp graph and a cyan one for humidity.
+									- under the graphs, there should be 3 sensor boxes with live display data from each sensor, First DHT will be UpperDHT, second will be LowerDHT and third will be SCD. For the first 2 boxes (DHT), there should be 2 lines 1 under the other Temperature and Humidity, in this order, For the SCD, add a 3rd line for CO2. All boxes sould display a blinking dot in the right corner when values are read from sensors and updated in the display boxes. Colouring of the dots should be the same as the colours used in the graph legends above. In the settings_modal, add temperature humidity and co2 low and high thresholds to define colouring for live display values colours(display values in red for under low and over high thresholds, green for ideal and orange for just under or above ideal.
+									- under the sensor boxes display toggles for relays 2,3,4,5,6 and 7, using there display name, colour the toggles in red to correspond when the relay is OFF and in green when its ON, use this collaring as default, despite the cause that the relay is toggled (automatic schedule, automatic environmental, or manual user. Ensure at startup, all relays are off by default and then read the environmental configuration and schedules from the config file. Timers, and trigger values and schedules should be configurable and editable/exportable/importable from the profiles_modal.
+					- profiles_modal - will have a profile selector, dropdown list(3 profiles: Test(default selected),Colonisation,Fruiting) followed by buttons(Load, Save, Rename, ExportALL and ImportAll(load will populate all text boxes with the stored values from json, Save, will save them to the corresponding selected profile in JSON and also apply them for use, Rename will rename the profile name, conserving all values, ExportALL will export the whole profiles.json file with all profiles in it, Import, will import the file, overwriting the one in spiffs and will apply the first profile in the list. Following that the categories of configs are as follows: 
+					a. Graphs, will have 2 text fields 1 for Graph Update Interval (sec): and the other for Graph Max Points:; 
+					b. Sensors - DHT Sensor Interval (sec):, SCD40 Sensor Interval (sec):;
+					c. Relays - Humidity - Text boxes for Humidity Low Threshold (%):, Humidity High Threshold (%):; Time setters for Start Time: --:-- and End Time: --:-- - this configuration will action Relay5 (Humidifier) ON or OFF in the specified time frame, based on the 2 Thresholds, when hit the low, turn on until hit high then stop. Repeat whenever the case is or when manually actioned by user.
+							  - Temperature - text boxes for Temperature Low Threshold (°C): and Temperature High Threshold (°C):; - this configuration will action Relay6 (Tube Heater) ON or OFF, based on the 2 Thresholds, when hit the low, turn on until hit high then stop. Repeat whenever the case is or when manually actioned by user.
+							  - FANS - add text fields for: CO₂ Low Threshold:; CO₂ High Threshold:; On Duration (min):; Cycle Interval (min):; Start Time: --:--, End Time: --:-- - Based on the CO2 Thresholds, action Relay7 (IN/OUT Fans) and for the Cycle interval timers and durations, action Relay4 (Fans), action each relay, ON or OFF based on conditions either timer, cycle or thresholds, when hit the low, turn on until hit high then stop. Repeat whenever the case is Ensure operation runs in the selected timeframe, or when manually actioned by user. 
+
+					- settings_modal - add categories - Log Level - drop down to configure logging level and output, options are: DEBUG(default selected), INFO, WARN, ERROR.
+																   - text box to configure maximum log file size (on spiffs)
+																   - address of the log listener (textbox), where to pipe out logs (class should be configurable in the logger function and module)
+																   - Timing to flush out the logs in seconds (textbox)
+																   - Sensor error count (textbox) used for recovery conditions(ensure proper endpoint is generated and used).
+													   - Sensor and relay testing suite (implement) 
+													   - Reboot Scheduler - Day of Week(dropdown list), Time: --:-- - schedule automatic reboot every week, in that day and time.
+													   - Reboot now button
+													   - Factory reset button - clear all user edited files and restore initial factory configuration.
+													   - Configuration for sleep mode (drop down, No Sleep(default selected), Modem Sleep (Wifi/Ble off) / Light sleep (Wifi+Ble, CPU OFF) / Deep Sleep (everything off apart from essential hardware(ULP) / Hibernation (everything off apart from RTC)) and 2 interval timers From:Time: --:-- and To:Time: --:--;
+													   - Notifications configurations (fully implement a system for notifying via telegram or push notifications or any other method apart from mail or sms)
+									- save button - save all data from the form in settings.json and applies configuration and ensure you implement all endpoints and functionality.
+													   
+
+					- network_modal - add categories - Wifi - Button Select Wifi1 for Wifi - opens a popup that displays SSID, MAC and RSSI of networks in range, gives ability to select 1 and store credentials in NVS		
+															 - Button Select Wifi2 for Wifi - opens a popup that displays SSID, MAC and RSSI of networks in range, gives ability to select 1
+					and store credentials in NVS			
+															 - Button Select Wifi3 for Wifi - opens a popup that displays SSID, MAC and RSSI of networks in range, gives ability to select 1
+					and store credentials encrypted
+													  - IP Config radio checkbox Option 1 (default) DHCP, Option 2 Static - when static is selected, reveal the following textboxes(IP:,Netmask:,Gateway,DNS1:,DNS2:). Add default values in config and populate when selected.
+													  -	mDNS Hostname: (textbox) - hostname used for mdns_hostname;
+													  -Watchdog - minimum RSSI: (textbox) - used for the watchdog checker to switch network or attempt reconnection. 
+																- timer to check if wifi is still connected (textbox)
+													  -	MQTT - radio checkbox, Option1 Off(default), Option2 ON, when selected, reveal the following text boxes(Broker: 
+Port:1883, Topic: mushroom/tent), Add default values in config and populate when selected.
+									- save button (saves all config to file network.json, applies values and restarts affected services)				 	
+					
+				c. system.html - this is composed of 5 parts, first one is the menu header banner, as in index.html but without the clear graphs, button, and instead of the system link, add dashboard target_self, after the banner, split the height in 3 equal parts, and the first part on the top after the banner in 2 equal parts on the width.
+					-first section left - <h2>System Information - composed of  - IP Address: 10.10.1.120 followed by next row WiFi SSID: xxx, MAC, RSSI:,
+										- <h2>FS, & RAM - composed of - RAM: xxx MB used / yyy MB Free / Total: zzz MB and a progress bar underneath to reflect usage,
+																		   - FS: xxx MB used / yyy MB Free / Total: zzz MB and a progress bar underneath to reflect usage,
+																		   - CPU: Frequency, Temp and  Usage and a progress bar underneath to reflect usage,
+					-first section right - <h2>OTA Update and on the next row: Current FS Version: x.x.x | Current Firmware Version: Z.Z.Z (values read from firmware versioning module)
+                                        - Select PKG File (.pkg): Chose file button, No file chosen, Upload PKG Button and on the next line,
+- Update & restart checkbox, 
+										- Progress bar to reflect ota upload and progress, bar is common for both FS and FW.
+										- Status display and text progress updater - display OTA related messages in course of the update process. 	
+					-second vertical section - log box (live log box text box) with auto scroll and timestamp
+					
+				d. tapo.html - test implementation page, add a modal to configure the info needed in the library, (user, pass, and add 3 spots for outlets (ip addresses), a button to test connectivity(display status log underneath it(messages that connection was successful or not or anything returned by the server) and 3 on/off toggles, one for each outlet, display status text underneath each outlet toggle of its current state) 
+
+10. Please provide the complete frontend code, including all necessary libraries, headers, and configuration files.
+
+
+C. Documentation - Please provide comprehensive documentation for the entire application, including:
+
+1. Full API Documentation.
+2. Full System Documentation. 
+3. User manual , Configuration & Troubleshooting Guide.
+4. READ.ME file and V1.0.0 Release Info for GIT.
+5. Generate Apache License Version 2.0 template with placeholders for my information.
+
+Follow the 3(A,B and C)) main points and each and every subpoint and generate a fully working application from the given criteria. If you have any questions or need clarification please ask  prior to generating.

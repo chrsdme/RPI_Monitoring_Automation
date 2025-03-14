@@ -1,0 +1,40 @@
+mushroom-controller/
+├── app.py                  # Main application entry point
+├── install.sh              # Installation script
+├── requirements.txt        # Python dependencies
+├── README.md               # Documentation
+├── LICENSE                 # Apache 2.0 license
+├── core/                   # Core modules
+│   ├── __init__.py
+│   ├── system_manager.py
+│   ├── network_manager.py
+│   ├── web_api_manager.py
+│   ├── ota_manager.py
+│   ├── components_manager.py
+│   └── components/         # Hardware components
+│       ├── __init__.py
+│       ├── sensor_manager.py
+│       ├── relay_manager.py
+│       └── tapo_manager.py
+├── config/                 # Configuration files
+│   ├── config.json
+│   └── wifi_credentials.json
+├── data/                   # Database and data files
+│   └── mushroom_controller.db
+└── web/                    # Web interface
+    ├── static/             # Static assets
+    │   ├── css/
+    │   │   ├── style.css
+    │   │   └── dark-mode.css
+    │   ├── js/
+    │   │   ├── main.js
+    │   │   ├── sensors.js
+    │   │   ├── relays.js
+    │   │   ├── profiles.js
+    │   │   ├── settings.js
+    │   │   └── network.js
+    │   └── img/
+    │       └── favicon.ico
+    └── templates/          # HTML templates
+        ├── index.html
+        └── system.html
