@@ -30,16 +30,20 @@ mkdir -p $APP_DIR
 echo "Copying application files..."
 cp -r ./* $APP_DIR/
 
+# Create necessary directories
+mkdir -p $APP_DIR/config
+mkdir -p $APP_DIR/data
+mkdir -p $APP_DIR/web/static/css
+mkdir -p $APP_DIR/web/static/js
+mkdir -p $APP_DIR/web/templates
+mkdir -p $APP_DIR/core/components
+
 # Create Python virtual environment
 echo "Setting up Python virtual environment..."
 python3 -m venv $APP_DIR/venv
 source $APP_DIR/venv/bin/activate
 pip install --upgrade pip
 pip install -r $APP_DIR/requirements.txt
-
-# Create data directory
-echo "Creating data directory..."
-mkdir -p $APP_DIR/data
 
 # Create service file
 echo "Creating systemd service..."
